@@ -41,7 +41,7 @@ $tenantId = Get-AzTenant | Select-Object -ExpandProperty TenantId
 Invoke-ARI -TenantID $tenantId -Automation -SecurityCenter -IncludeCosts -StorageAccount $stg -StorageContainer "reports"
 ```
 
-The script is can be found here: [ps/ari_runbook.ps1](https://dev.azure.com/scc-ddat-infrastructure/_git/AzureInventoryAutomation?path=/ps/ari_runbook.ps1).
+The script is can be found here: [ps/ari_runbook.ps1](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/ps/ari_runbook.ps1).
 
 The name of the storage account is generated dynamically during the deployment and passed to the runbook as an Automation Account variable named `storageAccountName`. The automation account will use a System Assigned Managed Identity to authenticate to Azure and run the inventory.
 
@@ -55,7 +55,7 @@ This deployment will need to be run as multiple separate stages due to the requi
 4. Upload the PowerShell script to the storage account scripts container.
 5. Deploy and configure the automation account and runbook.
 
-The pipeline is defined in [azure-pipelines.yml](https://dev.azure.com/scc-ddat-infrastructure/_git/AzureInventoryAutomation?path=/azure-pipelines.yml).
+The pipeline is defined in [deploy.yml](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/.github/workflows/deploy.yml).
 
 ## Deploy Resource Group Stage
 

@@ -1,36 +1,68 @@
-# This is a basic workflow to help you get started with Actions
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+# This workflow will deploy Azure Resource Inventory using GitHub Actions and schedule a monthly run.
 
-name: CI
+name: Deploy Azure Resource Inventory
 
 # Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches:
+      - main
+    paths: 
+      - 'bicep'
+      - 'ps'
+      - '.github/workflows/deploy.yml'
+  
+      # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  id-token: write # Require write permission to Fetch an OIDC token.
+  actions: read # Required if repo is private.
+  contents: read # Required if repo is private.
+
+env:
+  AZURE_RESOURCE_GROUP: rg-uks-sandbox-ari-pmc
+  AZURE_LOCATION: uksouth
+
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  deploy:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Check out repository code
+        uses: actions/checkout@v5
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+      - name: deployRg
+        uses: azure/bicep-deploy@v2
+        with:
+          type: deployment
+          operation: create
+          name: deploy-ari-rg
+          location: ${{ env.AZURE_LOCATION }}
+          scope: subscription
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          template-file: ./bicep/rg.bicep
+          parameters: '{"rgName": ${{ env.AZURE_RESOURCE_GROUP }}, "location": ${{ env.AZURE_LOCATION }}, "tags": { "Created By": "Paul McCormack", "Service": "ARI Demo", "Cost Centre": "Test" }}'
+      
+      - name: checks-storage-deploy
+        uses: azure/bicep-deploy@v2
+        with:
+          type: deployment
+          operation: validate
+          name: validate-ari-storage
+          location: ${{ env.AZURE_LOCATION }}
+          scope: resourceGroup
+          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+          template-file: ./bicep/storage.bicep
+          parameters-file: ./bicep/storage.bicepparam
+        
+          
