@@ -81,8 +81,8 @@ jobs:
             $blobUri = New-AzStorageBlobSASToken -Container "scripts" -Blob "ari_runbook.ps1" -Context $storageContext -Permission "r" -StartTime $startTime -ExpiryTime $endTime -FullUri
             $fileHash = Get-FileHash -Path "ps/ari_runbook.ps1" -Algorithm SHA256
             $fileHashOutput = $fileHash.Hash
-            "blob_uri=$blobUri" | Out-File -FilePath $GITHUB_OUTPUT -Append
-            "file_hash=$fileHashOutput" | Out-File -FilePath $GITHUB_OUTPUT -Append
+            "blob_uri=$blobUri" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "file_hash=$fileHashOutput" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           azPSVersion: latest
 
       - name: Deploy Automation Account and Runbook
