@@ -41,7 +41,8 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
-      - name: deployRg
+      - name: Deploy Resource Group
+        id: deployRg
         uses: azure/bicep-deploy@v2
         with:
           type: deployment
@@ -53,16 +54,52 @@ jobs:
           template-file: ./bicep/rg.bicep
           parameters: '{"rgName": ${{ env.AZURE_RESOURCE_GROUP }}, "location": ${{ env.AZURE_LOCATION }}, "tags": { "Created By": "Paul McCormack", "Service": "ARI Demo", "Cost Centre": "Test" }}'
       
-      - name: checks-storage-deploy
+      - name: Deploy Storage Account
+        id: deployStg
         uses: azure/bicep-deploy@v2
         with:
           type: deployment
-          operation: validate
-          name: validate-ari-storage
-          location: ${{ env.AZURE_LOCATION }}
+          operation: create
+          name: deploy-ari-storage
           scope: resourceGroup
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           template-file: ./bicep/storage.bicep
-          parameters-file: ./bicep/storage.bicepparam
-        
+          parameters-file: ./bicep/stg.bicepparam
+      
+      - name: Deploy ARI Runbook Script to Storage Account
+        id: uploadScript
+        uses: azure/powershell@v2
+        with:
+          inlineScript: |
+            $saName = ${{ steps.deployStg.outputs.storageAccountName }}
+            $stgkey = Get-AzStorageAccountKey -ResourceGroupName ${{ env.AZURE_RESOURCE_GROUP }} -Name $saName | Where-Object {$_.KeyName -eq "key1"}
+            $storageContext = New-AzStorageContext -StorageAccountName $saName -Protocol Https -StorageAccountKey $stgkey.Value
+            Set-AzStorageBlobContent -File "ps/ari_runbook.ps1" -Container "scripts" -Context $storageContext -Force
+            $startTime = Get-Date
+            $endTime = $startTime.AddHours(1)
+            $blobUri = New-AzStorageBlobSASToken -Container "scripts" -Blob "ari_runbook.ps1" -Context $storageContext -Permission "r" -StartTime $startTime -ExpiryTime $endTime -FullUri
+            $fileHash = Get-FileHash -Path "ps/ari_runbook.ps1" -Algorithm SHA256
+            $fileHashOutput = $fileHash.Hash
+            "blob_uri=$blobUri" | Out-File -FilePath $GITHUB_OUTPUT -Append
+            "file_hash=$fileHashOutput" | Out-File -FilePath $GITHUB_OUTPUT -Append
+          azPSVersion: latest
+
+      - name: Deploy Automation Account and Runbook
+        id: deployRunbook
+        env:
+          BLOB_URI: ${{ steps.uploadScript.outputs.blob_uri }}
+          FILE_HASH: ${{ steps.uploadScript.outputs.file_hash }}
+        uses: azure/bicep-deploy@v2
+        with:
+          type: deployment
+          operation: create
+          name: deploy-ari-automation
+          scope: resourceGroup
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+          template-file: ./bicep/main.bicep
+          parameters: '{"existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ env.BLOB_URI }}", "runbookScriptHash": "${{ env.FILE_HASH }}"}'
+          
+
           

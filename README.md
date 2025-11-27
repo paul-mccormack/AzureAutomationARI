@@ -1,5 +1,7 @@
 # Azure Inventory Automation Project
 
+[![Deploy Azure Resource Inventory](https://github.com/paul-mccormack/AzureAutomationARI/actions/workflows/deploy.yml/badge.svg)](https://github.com/paul-mccormack/AzureAutomationARI/actions/workflows/deploy.yml)
+
 This project has been setup to define, deploy and manage a solution to periodically run an automated inventory of SCC Azure resources. The project is based on the following solution [Azure Resource Inventory](https://github.com/Azure/azure-resource-inventory).
 
 The solution will use the following Azure services:
