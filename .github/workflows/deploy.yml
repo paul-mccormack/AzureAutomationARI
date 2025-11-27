@@ -72,7 +72,7 @@ jobs:
         uses: azure/powershell@v2
         with:
           inlineScript: |
-            $saName = ${{ steps.deployStg.outputs.storageAccountName }}
+            $saName = "${{ steps.deployStg.outputs.storageAccountName }}"
             $stgkey = Get-AzStorageAccountKey -ResourceGroupName ${{ env.AZURE_RESOURCE_GROUP }} -Name $saName | Where-Object {$_.KeyName -eq "key1"}
             $storageContext = New-AzStorageContext -StorageAccountName $saName -Protocol Https -StorageAccountKey $stgkey.Value
             Set-AzStorageBlobContent -File "ps/ari_runbook.ps1" -Container "scripts" -Context $storageContext -Force
