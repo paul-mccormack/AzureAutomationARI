@@ -51,47 +51,38 @@ The name of the storage account is generated dynamically during the deployment a
 
 This deployment will need to be run as multiple separate stages due to the requirement to populate the PowerShell script into the storage account after it has been created and before the automation account can be created. These are:
 
-1. Deploy the resource group.
-2. Check the resource bicep templates for errors and best practices.
-3. Deploy the storage account and create blob containers for the scripts and reports.
-4. Upload the PowerShell script to the storage account scripts container.
-5. Deploy and configure the automation account and runbook.
+1. Deploy the resource group and create a no delete lock.
+2. Deploy the storage account and create blob containers for the scripts and reports.
+3. Upload the PowerShell script to the storage account scripts container.
+4. Deploy and configure the automation account and runbook.
 
 The pipeline is defined in [deploy.yml](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/.github/workflows/deploy.yml).
 
-## Deploy Resource Group Stage
+## Deploy Resource Group
 
-This is performed at the first stage of the pipeline using the `AzureResourceManagerTemplateDeployment@3` task. The resource group and location are defined as pipeline variables and the tags are passed to the deploy within the `overrideParameters` input.
+This is performed at the first step of the pipeline using the `azure/bicep-deploy@v2` action. The resource group and location are defined as pipeline environment variables and the tags are passed to the deploy within the `parameters` input.
 
-## Bicep Pre-Deployment Checks Stage
+## Resource Deployments
 
-The stage is to check the bicep deployment files for errors and best practices. Any warnings at this stage will be displayed in the build log. Any errors will cause the job to fail.
+This deployment is complicated due to requiring properties that are unknown at the start of the deployment. It's broken down into multiple steps to perform the deployment of the storage account, upload of the PowerShell script from this repo and perform the deployment of the automation account, runbook, and schedule. The runbook is pulled from the storage account at deployment time. Later steps require information that's generated dynamically during the deployment, these are the storage account name, the storage account access key and the URI including the SAS token of the PowerShell script in the storage account.
 
-## Deployment Stage
+### Deploy Storage Account step
 
-This stage is more complicated than the previous stages. It's broken down into multiple jobs to perform the deployment of the storage account, upload of the PowerShell script from this repo and deployment of the automation account, runbook, and schedule. The runbook is pulled from the storage account at deployment time. It's also further complicated in that the later jobs require information that's generated dynamically during the deployment, these are the storage account name, the storage account access key and the URI including the SAS token of the PowerShell script in the storage account.
-
-### Deploy Storage Account job
-
-This job uses the `AzureResourceManagerTemplateDeployment@3` task to deploy the storage account and create the scripts and reports blob containers.
+This step again uses the `azure/bicep-deploy@v2` action to deploy the storage account and create the scripts and reports blob containers.
 
 ```yml
-- job: DeployStorage  # Deploy Storage Account, blob containers and obtain outputs
-  displayName: 'Deploy Storage Account and Blob Containers'
-  steps:
-    - task: AzureResourceManagerTemplateDeployment@3
-      displayName: 'Deploy Storage Account and Blob Containers'
-      inputs:
-        deploymentScope: Resource Group
-        azureResourceManagerConnection: $(service-connection)
-        subscriptionId: $(subscriptionId)
-        location: $(location)
-        resourceGroupName: $(rgName)
-        templateLocation: 'Linked artifact'
-        csmFile: 'bicep/stg.bicep'
-        csmParametersFile: 'bicep/stg.bicepparam'
-        deploymentMode: Incremental
-        deploymentOutputs: stgOutputs
+- name: Deploy Storage Account
+  id: deployStg
+  uses: azure/bicep-deploy@v2
+  with:
+    type: deployment
+    operation: create
+    name: deploy-ari-storage
+    scope: resourceGroup
+    subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+    template-file: ./bicep/stg.bicep
+    parameters-file: ./bicep/stg.bicepparam
 ```
 
 Storage Accounts in Azure are required to have a globally unique name. To ensure this it's good practice to append a random string to the name.
@@ -117,41 +108,20 @@ resource stg 'Microsoft.Storage/storageAccounts@2025-01-01' = {
 output storageAccountName string = stg.name
 ```
 
-The full bicep template can be found in [stg.bicep](https://dev.azure.com/scc-ddat-infrastructure/_git/AzureInventoryAutomation?path=/bicep/stg.bicep).
+The full bicep template can be found in [stg.bicep](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/bicep/stg.bicep).
 
-The storage account name is output from the deployment and captured in the `stgOutputs` variable. The next task runs a PowerShell loop to extract the outputs and save them to pipeline variables for use in later jobs.
+`azure/bicep-deploy@v2` action supports output variables from the Bicep template which can be referenced in later steps. The storage account name is saved to an output variable called `storageAccountName`, this is referenced in the next step using the step id: `"${{ steps.deployStg.outputs.storageAccountName }}"`.
 
-```yml
-- task: PowerShell@2
-  name: StgOutputs
-  displayName: Obtain Azure Deployment outputs
-  inputs:
-    targetType: 'inline'
-    script: |
-      if (![string]::IsNullOrEmpty( '$(stgOutputs)' )) {
-        $DeploymentOutputs = convertfrom-json '$(stgOutputs)'
-        $DeploymentOutputs.PSObject.Properties | ForEach-Object {
-            $keyname = $_.Name
-            $value = $_.Value.value
-            Write-Host "##vso[task.setvariable variable=$keyname;isOutput=true]$value"
-        }
-      }
-```
 
 ### Stage Script stage
 
-The function of this job is to upload the PowerShell script from this repo to the `scripts` blob container. Before that can succeed the storage account access key is required to enable the DevOps pipeline agent to access the storage account. The storage account name generated in the previous job is passed into this job as a dependency output variable.
-
-```yml
-variables:
-  pipelineVarStorageAccountName: $[ dependencies.DeployStorage.outputs['StgOutputs.storageAccountName'] ]
-```
+The function of this job is to upload the PowerShell script from this repo to the `scripts` blob container. Before that can succeed the storage account access key is required to enable the DevOps pipeline agent to access the storage account. The storage account name generated in the previous job is passed into this job as as detailed above.
 
 The job then uses an inline PowerShell script to retrieve the access key and save it to a variable called `$stgkey`.
 
 ```powershell
-$saName = "$(pipelineVarStorageAccountName)"
-$stgkey = Get-AzStorageAccountKey -ResourceGroupName $(rgName) -Name $saName | Where-Object {$_.KeyName -eq "key1"}
+$saName = "${{ steps.deployStg.outputs.storageAccountName }}"
+$stgkey = Get-AzStorageAccountKey -ResourceGroupName ${{ env.AZURE_RESOURCE_GROUP }} -Name $saName | Where-Object {$_.KeyName -eq "key1"}
 ```
 
 The script then creates a storage context and uploads the PowerShell script to the `scripts` container.
@@ -175,26 +145,25 @@ Then generate a file hash value of the PowerShell script which is required to su
 $fileHash = Get-FileHash -Path "ps/ari_runbook.ps1" -Algorithm SHA256
 $fileHashOutput = $fileHash.Hash
 ```
-Finally, all the required output variables are saved to pipeline variables for use in the next job.
+The final requirement of this step is to pass the blob SAS URI and file hash to the next jon in the pipeline.  This can be done by setting [output parameters](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#setting-an-output-parameter).
 
 ```powershell
-Write-Host "##vso[task.setvariable variable=blobSasUriOutput;isOutput=true]$blobUri"
-Write-Host "##vso[task.setvariable variable=blobHashOutput;isOutput=true]$fileHashOutput"
-Write-Host "##vso[task.setvariable variable=saNameOutput;isOutput=true]$saName"
+"blob_uri=$blobUri" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+"file_hash=$fileHashOutput" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 ```
+
+As we are using PowerShell in this step we need to use  `$env:GITHUB_OUTPUT`.
 
 The complete task is shown below.
 
 ```yml
-- task: AzurePowerShell@5
-  name: StageScriptsTask
-  displayName: 'Upload PowerShell Scripts to Storage Account'
-  inputs:
-    azureSubscription: $(service-connection)
-    ScriptType: 'InlineScript'
-    Inline: |
-      $saName = "$(pipelineVarStorageAccountName)"
-      $stgkey = Get-AzStorageAccountKey -ResourceGroupName $(rgName) -Name $saName | Where-Object {$_.KeyName -eq "key1"}
+- name: Deploy ARI Runbook Script to Storage Account
+  id: uploadScript
+  uses: azure/powershell@v2
+  with:
+    inlineScript: |
+      $saName = "${{ steps.deployStg.outputs.storageAccountName }}"
+      $stgkey = Get-AzStorageAccountKey -ResourceGroupName ${{ env.AZURE_RESOURCE_GROUP }} -Name $saName | Where-Object {$_.KeyName -eq "key1"}
       $storageContext = New-AzStorageContext -StorageAccountName $saName -Protocol Https -StorageAccountKey $stgkey.Value
       Set-AzStorageBlobContent -File "ps/ari_runbook.ps1" -Container "scripts" -Context $storageContext -Force
       $startTime = Get-Date
@@ -202,16 +171,16 @@ The complete task is shown below.
       $blobUri = New-AzStorageBlobSASToken -Container "scripts" -Blob "ari_runbook.ps1" -Context $storageContext -Permission "r" -StartTime $startTime -ExpiryTime $endTime -FullUri
       $fileHash = Get-FileHash -Path "ps/ari_runbook.ps1" -Algorithm SHA256
       $fileHashOutput = $fileHash.Hash
-      Write-Host "##vso[task.setvariable variable=blobSasUriOutput;isOutput=true]$blobUri"
-      Write-Host "##vso[task.setvariable variable=blobHashOutput;isOutput=true]$fileHashOutput"
-      Write-Host "##vso[task.setvariable variable=saNameOutput;isOutput=true]$saName"
-    azurePowerShellVersion: 'LatestVersion'
-    pwsh: true
+      "blob_uri=$blobUri" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      "file_hash=$fileHashOutput" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+    azPSVersion: latest
   ```
 
 ### Deploy main resources stage
 
-The final job in this stage deploys the automation account, runbook and schedule. It requires the storage account name, the blob SAS URI and the file hash of the PowerShell script to be passed in as dependency output variables.
+The final job in this stage deploys the automation account, runbook and schedule using the variables and step outputs generated during the deployment.
+
+We can reference the `storageAccountName` output the same as before but the `GITHUB_OUTPUT` variables need to be defined as environment variables in this 
 
 ```yml
 variables:
@@ -238,3 +207,8 @@ The job uses the `AzureResourceManagerTemplateDeployment@3` task to deploy the r
 ```
 
 The bicep template is located here: [main.bicep](https://dev.azure.com/scc-ddat-infrastructure/_git/AzureInventoryAutomation?path=/bicep/main.bicep).
+
+
+## Notes
+
+See if I can drop the env variables in the last step and reference the output variables directly.  Talk about the powershell script to run ARI.  Talk about the storage automation account needing read access to the subscriptions or management groups being scanned.  

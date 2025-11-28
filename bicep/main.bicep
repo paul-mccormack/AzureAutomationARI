@@ -14,7 +14,7 @@ metadata templateInfo = {
 param location string = resourceGroup().location
 
 @description('Name of the Automation Account to be created.')
-param automationAccountName string = 'azinvautoaa-test'
+param automationAccountName string
 
 @description('Name of an existing Storage Account to be used by the Automation Account for storing runbook output and pulling the ps script for the runbook. The Storage Account must have blob container named "reports" and "scripts".')
 param existingStorageAccountName string

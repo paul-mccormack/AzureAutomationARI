@@ -25,6 +25,7 @@ permissions:
 env:
   AZURE_RESOURCE_GROUP: rg-uks-sandbox-ari-pmc
   AZURE_LOCATION: uksouth
+  AUTOMATION_ACCOUNT_NAME: azinvautoaa-test
 
 jobs:
   deploy:
@@ -64,7 +65,7 @@ jobs:
           scope: resourceGroup
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
-          template-file: ./bicep/storage.bicep
+          template-file: ./bicep/stg.bicep
           parameters-file: ./bicep/stg.bicepparam
       
       - name: Deploy ARI Runbook Script to Storage Account
@@ -87,9 +88,9 @@ jobs:
 
       - name: Deploy Automation Account and Runbook
         id: deployRunbook
-        env:
-          BLOB_URI: ${{ steps.uploadScript.outputs.blob_uri }}
-          FILE_HASH: ${{ steps.uploadScript.outputs.file_hash }}
+        #env:
+        #  BLOB_URI: ${{ steps.uploadScript.outputs.blob_uri }}
+        #  FILE_HASH: ${{ steps.uploadScript.outputs.file_hash }}
         uses: azure/bicep-deploy@v2
         with:
           type: deployment
@@ -99,7 +100,8 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           template-file: ./bicep/main.bicep
-          parameters: '{"existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ env.BLOB_URI }}", "runbookScriptHash": "${{ env.FILE_HASH }}"}'
+          #parameters: '{"automationAccountName": ${{ env.AUTOMATION_ACCOUNT_NAME }}, "existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ env.BLOB_URI }}", "runbookScriptHash": "${{ env.FILE_HASH }}"}'
+          parameters: '{"automationAccountName": ${{ env.AUTOMATION_ACCOUNT_NAME }}, "existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ steps.uploadScript.outputs.blob_uri }}", "runbookScriptHash": "${{ steps.uploadScript.outputs.file_hash }}"}'
           
 
           
