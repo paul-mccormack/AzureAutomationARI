@@ -43,7 +43,7 @@ $tenantId = Get-AzTenant | Select-Object -ExpandProperty TenantId
 Invoke-ARI -TenantID $tenantId -Automation -SecurityCenter -IncludeCosts -StorageAccount $stg -StorageContainer "reports"
 ```
 
-The script is can be found here: [ps/ari_runbook.ps1](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/ps/ari_runbook.ps1).
+The script can be found here: [ps/ari_runbook.ps1](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/ps/ari_runbook.ps1).
 
 The name of the storage account is generated dynamically during the deployment and passed to the runbook as an Automation Account variable named `storageAccountName`. The automation account will use a System Assigned Managed Identity to authenticate to Azure and run the inventory.
 
