@@ -211,4 +211,8 @@ The bicep template is located here: [main.bicep](https://dev.azure.com/scc-ddat-
 
 ## Notes
 
-See if I can drop the env variables in the last step and reference the output variables directly.  Talk about the powershell script to run ARI.  Talk about the storage automation account needing read access to the subscriptions or management groups being scanned.  
+See if I can drop the env variables in the last step and reference the output variables directly.
+
+Talk about the powershell script to run ARI.
+
+Talk about the storage automation account needing read access to the subscriptions or management groups being scanned.  

@@ -179,7 +179,7 @@ resource schedule 'Microsoft.Automation/automationAccounts/schedules@2024-10-23'
 
 @description('Linking the schedule to the Azure Resource Inventory runbook')
 resource jobSchedule 'Microsoft.Automation/automationAccounts/jobSchedules@2024-10-23' = {
-  name: guid(resourceGroup().id, schedule.id)
+  name: guid(resourceGroup().id, schedule.id, runbook.id)
   parent: automation
   properties: {
     runbook: {
