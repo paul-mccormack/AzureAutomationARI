@@ -2,7 +2,7 @@
 
 [![Deploy Azure Resource Inventory](https://github.com/paul-mccormack/AzureAutomationARI/actions/workflows/deploy.yml/badge.svg)](https://github.com/paul-mccormack/AzureAutomationARI/actions/workflows/deploy.yml)
 
-This project has been setup to define, deploy and manage a solution to periodically run an automated inventory of SCC Azure resources. The project is based on the following solution [Azure Resource Inventory](https://github.com/microsoft/ARI).
+This project has been setup to define, deploy and manage a solution to periodically run an automated inventory of Azure resources in a tenant. The project is based on the following solution [Azure Resource Inventory](https://github.com/microsoft/ARI).
 
 The solution will use the following Azure services:
 
@@ -11,7 +11,7 @@ The solution will use the following Azure services:
 
 The CI/CD pipeline in this project will create the resources and assign the necessary role assignments to the Automation Account, enabling it to create the output files in the storage account.
 
-> ALERT: The Automation account will require reader access to the top level management groups or subscriptions to be inventoried. In my case I didn't want to give the service principal access to the top level management group.  Meaning I will need to perform this role assignment manually after deployment.  It's personal preference whether you want to automate this or not.
+> ALERT: The Automation account will require reader access to the management groups or subscriptions to be inventoried. In my case I didn't want to give the service principal access to the top level management group. Meaning I will need to perform this role assignment manually after deployment.  It's personal preference whether you want to automate this or not.
 
 
 # Azure Resource Inventory PowerShell Module function
@@ -113,9 +113,9 @@ The full bicep template can be found in [stg.bicep](https://github.com/paul-mcco
 `azure/bicep-deploy@v2` action supports output variables from the Bicep template which can be referenced in later steps. The storage account name is saved to an output variable called `storageAccountName`, this is referenced in the next step using the step id: `"${{ steps.deployStg.outputs.storageAccountName }}"`.
 
 
-### Stage Script stage
+### Stage Script step
 
-The function of this job is to upload the PowerShell script from this repo to the `scripts` blob container. Before that can succeed the storage account access key is required to enable the DevOps pipeline agent to access the storage account. The storage account name generated in the previous job is passed into this job as as detailed above.
+The function of this job is to upload the PowerShell script from this repo to the `scripts` blob container. Before that can succeed the storage account access key is required to enable the pipeline agent to access the storage account. The storage account name generated in the previous job is passed into this job as as detailed above.
 
 The job then uses an inline PowerShell script to retrieve the access key and save it to a variable called `$stgkey`.
 
@@ -176,7 +176,7 @@ The complete task is shown below.
     azPSVersion: latest
   ```
 
-### Deploy main resources stage
+### Deploy main resources step
 
 The final step deploys the automation account, runbook and schedule using the variables and step outputs generated during the deployment.
 

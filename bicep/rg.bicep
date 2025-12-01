@@ -1,6 +1,6 @@
 metadata templateInfo = {
   author: 'Paul McCormack'
-  email: 'paul.mccormack@salford.gov.uk'
+  contact: 'https://github.com/paul-mccormack'
   description: 'Bicep template for deploying a resource group for Azure Inventory Automation'
   date: '7-10-25'
   version: '1.0'

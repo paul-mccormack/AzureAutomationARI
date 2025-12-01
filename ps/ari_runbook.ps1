@@ -3,7 +3,7 @@
 # It saves the inventory reports to a specified Azure Storage account and container.
 
 # Script created by Paul McCormack
-# Contact: paul.mccormack@salford.gov.uk
+# Contact: https://github.com/paul-mccormack
 # Date: 08/10/2025
 # Version: 1.0
 
