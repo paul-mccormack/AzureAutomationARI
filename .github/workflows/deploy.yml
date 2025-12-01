@@ -3,9 +3,7 @@
 
 name: Deploy Azure Resource Inventory
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
     branches:
       - main
@@ -14,7 +12,6 @@ on:
       - 'ps/**'
       - '.github/workflows/deploy.yml'
   
-      # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 permissions:
@@ -88,9 +85,6 @@ jobs:
 
       - name: Deploy Automation Account and Runbook
         id: deployRunbook
-        #env:
-        #  BLOB_URI: ${{ steps.uploadScript.outputs.blob_uri }}
-        #  FILE_HASH: ${{ steps.uploadScript.outputs.file_hash }}
         uses: azure/bicep-deploy@v2
         with:
           type: deployment
@@ -100,7 +94,6 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
           template-file: ./bicep/main.bicep
-          #parameters: '{"automationAccountName": ${{ env.AUTOMATION_ACCOUNT_NAME }}, "existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ env.BLOB_URI }}", "runbookScriptHash": "${{ env.FILE_HASH }}"}'
           parameters: '{"automationAccountName": ${{ env.AUTOMATION_ACCOUNT_NAME }}, "existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ steps.uploadScript.outputs.blob_uri }}", "runbookScriptHash": "${{ steps.uploadScript.outputs.file_hash }}"}'
           
 

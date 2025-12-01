@@ -2,7 +2,7 @@
 
 [![Deploy Azure Resource Inventory](https://github.com/paul-mccormack/AzureAutomationARI/actions/workflows/deploy.yml/badge.svg)](https://github.com/paul-mccormack/AzureAutomationARI/actions/workflows/deploy.yml)
 
-This project has been setup to define, deploy and manage a solution to periodically run an automated inventory of SCC Azure resources. The project is based on the following solution [Azure Resource Inventory](https://github.com/Azure/azure-resource-inventory).
+This project has been setup to define, deploy and manage a solution to periodically run an automated inventory of SCC Azure resources. The project is based on the following solution [Azure Resource Inventory](https://github.com/microsoft/ARI).
 
 The solution will use the following Azure services:
 
@@ -11,12 +11,12 @@ The solution will use the following Azure services:
 
 The CI/CD pipeline in this project will create the resources and assign the necessary role assignments to the Automation Account, enabling it to create the output files in the storage account.
 
-> ALERT: The Automation account will require reader access to the top level management groups or subscriptions to be inventoried. This will need to be completed manually after the deployment.
+> ALERT: The Automation account will require reader access to the top level management groups or subscriptions to be inventoried. In my case I didn't want to give the service principal access to the top level management group.  Meaning I will need to perform this role assignment manually after deployment.  It's personal preference whether you want to automate this or not.
 
 
 # Azure Resource Inventory PowerShell Module function
 
-The code snip below show the PowerShell script that will be automated to run the inventory report.
+The code snip below show the PowerShell script that will be automated to run the inventory report.  The `Invoke-ARI` function in my script is configured to perform a scan of the entire tenant.  See the documentation linked above for details of other options you can use to configure the scan.
 
 ```powershell
 Import-Module AzureResourceInventory
@@ -178,41 +178,29 @@ The complete task is shown below.
 
 ### Deploy main resources stage
 
-The final job in this stage deploys the automation account, runbook and schedule using the variables and step outputs generated during the deployment.
+The final step deploys the automation account, runbook and schedule using the variables and step outputs generated during the deployment.
 
-We can reference the `storageAccountName` output the same as before but the `GITHUB_OUTPUT` variables need to be defined as environment variables in this 
+We can reference the `storageAccountName` output the same as before and pass them into parameters for the bicep template.
 
-```yml
-variables:
-  pipelineVarStorageAccountName: $[ dependencies.DeployStorage.outputs['StgOutputs.storageAccountName'] ]
-  pipelineVarBlobSasUri: $[ dependencies.StageScripts.outputs['StageScriptsTask.blobSasUriOutput'] ]
-  pipelineVarBlobHash: $[ dependencies.StageScripts.outputs['StageScriptsTask.blobHashOutput'] ]
-```
-
-The job uses the `AzureResourceManagerTemplateDeployment@3` task to deploy the resources using the bicep template `bicep/main.bicep`. The required parameters are passed into the deployment using the `overrideParameters` input. The task configuration is shown below.
+The job uses the `azure/bicep-deploy@v2` action to deploy the resources using the bicep template `bicep/main.bicep`. The task configuration is shown below.
 
 ```yml
-- task: AzureResourceManagerTemplateDeployment@3
-  displayName: 'Deploy Main Resources'
-  inputs:
-    deploymentScope: Resource Group
-    azureResourceManagerConnection: $(service-connection)
-    subscriptionId: $(subscriptionId)
-    location: $(location)
-    resourceGroupName: $(rgName)
-    templateLocation: Linked artifact
-    csmFile: 'bicep/main.bicep'
-    overrideParameters: -existingStorageAccountName $(pipelineVarStorageAccountName) -runbookScriptUri $(pipelineVarBlobSasUri) -runbookScriptHash $(pipelineVarBlobHash)
-    deploymentMode: Incremental
+- name: Deploy Automation Account and Runbook
+  id: deployRunbook
+  uses: azure/bicep-deploy@v2
+  with:
+    type: deployment
+    operation: create
+    name: deploy-ari-automation
+    scope: resourceGroup
+    subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    resource-group-name: ${{ env.AZURE_RESOURCE_GROUP }}
+    template-file: ./bicep/main.bicep
+    parameters: '{"automationAccountName": ${{ env.AUTOMATION_ACCOUNT_NAME }}, "existingStorageAccountName": ${{ steps.deployStg.outputs.storageAccountName }}, "runbookScriptUri": "${{ steps.uploadScript.outputs.blob_uri }}", "runbookScriptHash": "${{ steps.uploadScript.outputs.file_hash }}"}'
 ```
 
-The bicep template is located here: [main.bicep](https://dev.azure.com/scc-ddat-infrastructure/_git/AzureInventoryAutomation?path=/bicep/main.bicep).
+The bicep template is located here: [main.bicep](https://github.com/paul-mccormack/AzureAutomationARI/blob/main/bicep/main.bicep).
 
+### Conclusion
 
-## Notes
-
-See if I can drop the env variables in the last step and reference the output variables directly.
-
-Talk about the powershell script to run ARI.
-
-Talk about the storage automation account needing read access to the subscriptions or management groups being scanned.  
+With the solution deployed the automation account will run the inventory report on the schedule defined in the bicep template. If you want you can manually run the runbook to generate an inventory report on demand, it's probably good to make sure everything is working as expected. The output files will be stored in the `reports` blob container in the storage account.  Big thanks to the team who created Azure Resource Inventory, it's a great solution!
