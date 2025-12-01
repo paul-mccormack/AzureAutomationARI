@@ -10,8 +10,8 @@ on:
     branches:
       - main
     paths: 
-      - 'bicep'
-      - 'ps'
+      - 'bicep/**'
+      - 'ps/**'
       - '.github/workflows/deploy.yml'
   
       # Allows you to run this workflow manually from the Actions tab
